@@ -54,7 +54,11 @@ final class SecurityForm(
 
   object signup extends lila.core.security.SignupForm:
 
-    val emailField: Mapping[EmailAddress] = fullyValidEmail(using none)
+    // Email is optional - users can sign up without providing an email
+    val emailField: Mapping[Option[EmailAddress]] = optional(fullyValidEmail(using none))
+
+    // Required email field for cases like student release that need email
+    val requiredEmailField: Mapping[EmailAddress] = fullyValidEmail(using none)
 
     val username: Mapping[UserName] = LilaForm
       .cleanNonEmptyText(minLength = 2, maxLength = 20)
@@ -83,22 +87,11 @@ final class SecurityForm(
         u => u.id.noGhost && !userRepo.exists(u).await(3.seconds, "signupUsername")
       )
 
-    private val agreementBool = boolean.verifying(b => b)
-
-    private val agreement = mapping(
-      "assistance" -> agreementBool,
-      "nice" -> agreementBool,
-      "account" -> agreementBool,
-      "policy" -> agreementBool
-    )(AgreementData.apply)(unapply)
-
     def website(using RequestHeader) = hcaptcha.form:
       Form:
         mapping(
           "username" -> username,
           "password" -> newPasswordField,
-          "email" -> emailField,
-          "agreement" -> agreement,
           "fp" -> optional(nonEmptyText)
         )(SignupData.apply)(_ => None)
           .verifying(PasswordCheck.errorSame, x => x.password != x.username.value)
@@ -238,32 +231,24 @@ final class SecurityForm(
 
 object SecurityForm:
 
-  case class AgreementData(
-      assistance: Boolean,
-      nice: Boolean,
-      account: Boolean,
-      policy: Boolean
-  )
-
   trait AnySignupData:
     def username: UserName
-    def email: EmailAddress
+    def email: Option[EmailAddress]
     def fp: Option[String]
 
   case class SignupData(
       username: UserName,
       password: String,
-      email: EmailAddress,
-      agreement: AgreementData,
       fp: Option[String]
   ) extends AnySignupData:
+    def email: Option[EmailAddress] = None
     def fingerPrint = FingerPrint.from(fp.filter(_.nonEmpty))
     def clearPassword = ClearPassword(password)
 
   case class MobileSignupData(
       username: UserName,
       password: String,
-      email: EmailAddress
+      email: Option[EmailAddress]
   ) extends AnySignupData:
     def fp = none
 

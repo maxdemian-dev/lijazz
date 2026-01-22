@@ -131,8 +131,8 @@ export class Protocol {
       };
 
       if (multiPv === 1) {
-        if (depth === (this.currentEval?.depth ?? 0) + 1) {
-          // ignore skipped depth info lines before bestmove.
+        // Accept eval if depth is greater than current (or this is the first eval)
+        if (depth > (this.currentEval?.depth ?? 0)) {
           this.currentEval = {
             fen: this.work.currentFen,
             depth,

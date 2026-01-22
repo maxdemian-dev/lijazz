@@ -141,11 +141,11 @@ object home:
             views.feed.lobbyUpdates(lastUpdates)
           ,
           div(cls := "lobby__support")(
-            a(href := routes.Plan.index())(
-              iconTag(patronIconChar),
+            a(href := "https://github.com/maxdemian-dev/lijazz", targetBlank)(
+              iconTag(Icon.ExternalArrow),
               span(cls := "lobby__support__text")(
-                strong(trans.patron.donate()),
-                span(trans.patron.becomePatron())
+                strong("Source"),
+                span("View on GitHub")
               )
             ),
             a(href := "/swag")(

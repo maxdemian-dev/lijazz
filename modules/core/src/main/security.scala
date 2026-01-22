@@ -45,7 +45,8 @@ trait Hcaptcha:
   def form[A](form: Form[A])(using req: RequestHeader): Fu[HcaptchaForm[A]]
 
 trait SignupForm:
-  val emailField: Mapping[EmailAddress]
+  val emailField: Mapping[Option[EmailAddress]]
+  val requiredEmailField: Mapping[EmailAddress] // For cases like student release that need email
   val username: Mapping[UserName]
 
 opaque type FingerHash = String
@@ -53,7 +54,7 @@ object FingerHash extends OpaqueString[FingerHash]
 
 case class UserSignup(
     user: User,
-    email: EmailAddress,
+    email: Option[EmailAddress],
     req: RequestHeader,
     fingerPrint: Option[FingerHash],
     suspIp: Boolean,

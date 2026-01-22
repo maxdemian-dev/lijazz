@@ -286,7 +286,7 @@ final class ClasApi(
           .create(
             name = data.username,
             passwordHash = authenticator.passEnc(password),
-            email = email,
+            email = Some(email),
             blind = false,
             mobileApiVersion = none,
             mustConfirmEmail = false,

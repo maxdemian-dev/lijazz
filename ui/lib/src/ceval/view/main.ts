@@ -123,7 +123,7 @@ let gaugeLast = 0;
 let gaugeTicks: VNode[];
 
 export function renderGauge(ctrl: CevalHandler): VNode | undefined {
-  if (ctrl.ongoing || !ctrl.showEvalGauge()) return;
+  if (!ctrl.showEvalGauge()) return;
   gaugeTicks ??= [...Array(8).keys()].map(i =>
     hl(i === 3 ? 'tick.zero' : 'tick', { attrs: { style: `height: ${(i + 1) * 12.5}%` } }),
   );
@@ -133,10 +133,25 @@ export function renderGauge(ctrl: CevalHandler): VNode | undefined {
     ev = povChances('white', bestEv);
     gaugeLast = ev;
   } else ev = gaugeLast;
+  const blackHeight = 100 - (ev + 1) * 50;
+
+  const applyGaugeStyle = (el: HTMLElement) => {
+    el.style.height = `${blackHeight}%`;
+  };
+
   return hl(
     'div.eval-gauge',
     { class: { empty: !defined(bestEv), reverse: ctrl.getOrientation() === 'black' } },
-    [hl('div.black', { attrs: { style: `height: ${100 - (ev + 1) * 50}%` } }), gaugeTicks],
+    [
+      hl('div.black', {
+        hook: {
+          insert: vnode => applyGaugeStyle(vnode.elm as HTMLElement),
+          update: (_, vnode) => applyGaugeStyle(vnode.elm as HTMLElement),
+          postpatch: (_, vnode) => applyGaugeStyle(vnode.elm as HTMLElement),
+        },
+      }),
+      gaugeTicks,
+    ],
   );
 }
 

@@ -50,12 +50,19 @@ import { pubsub } from 'lib/pubsub';
 import { readFen, almostSanOf, speakable } from 'lib/game/sanWriter';
 import { plyToTurn } from 'lib/game/chess';
 import { type SocketSendOpts } from 'lib/socket';
-import type { NodeCrazy } from 'lib/tree/types';
+import type { NodeCrazy, ClientEval, LocalEval, TreeNode } from 'lib/tree/types';
+import type { EvalMeta } from 'lib/ceval';
 import Server from './server';
+import { CevalCtrl, type CevalOpts, type CevalHandler, type Step as CevalStep } from 'lib/ceval';
+import { prop } from 'lib';
+import { parseFen, makeFen } from 'chessops/fen';
+import { parseUci } from 'chessops/util';
+import { setupPosition } from 'chessops/variant';
+import { lichessRules } from 'chessops/compat';
 
 type GoneBerserk = Partial<ByColor<boolean>>;
 
-export default class RoundController implements MoveRootCtrl {
+export default class RoundController implements MoveRootCtrl, CevalHandler {
   data: RoundData;
   socket: RoundSocket;
   chessground: CgApi;
@@ -92,6 +99,14 @@ export default class RoundController implements MoveRootCtrl {
   nvui?: NvuiPlugin;
   vibration: Prop<boolean> = storedBooleanProp('vibration', false);
 
+  // CevalHandler implementation for live eval bar
+  ceval!: CevalCtrl;
+  showEvalGauge: Prop<boolean> = prop(true);
+  ongoing = false; // Must be false for gauge to render
+  private currentCeval?: ClientEval;
+  // Cache evaluations by board FEN to avoid losing them when position changes
+  private evalCache: Map<string, ClientEval> = new Map();
+
   constructor(
     readonly opts: RoundOpts,
     readonly redraw: Redraw,
@@ -124,6 +139,9 @@ export default class RoundController implements MoveRootCtrl {
     this.setQuietMode();
     this.confirmMoveToggle = toggle(d.pref.submitMove);
     this.moveOn = new MoveOn(this, 'move-on');
+
+    // Initialize ceval for live eval bar
+    this.initCeval();
     if (!d.local) this.transientMove = new TransientMove(this.socket);
     this.server = new Server(() => this.data);
 
@@ -266,6 +284,8 @@ export default class RoundController implements MoveRootCtrl {
     this.autoScroll();
     pubsub.emit('ply', ply);
     this.pluginUpdate(s.fen);
+    // Update eval bar when navigating through game
+    this.startCeval();
     return true;
   };
 
@@ -507,6 +527,8 @@ export default class RoundController implements MoveRootCtrl {
     if (!this.data.local) site.sound.move({ ...o, filter: 'music' });
     site.sound.saySan(step.san);
     this.server.alive();
+    // Update eval bar after each move
+    this.startCeval();
     return true; // prevents default socket pubsub
   };
 
@@ -950,4 +972,176 @@ export default class RoundController implements MoveRootCtrl {
 
       800,
     );
+
+  // CevalHandler implementation methods
+  private initCeval(): void {
+    const d = this.data;
+    const opts: CevalOpts = {
+      variant: d.game.variant,
+      initialFen: d.game.initialFen,
+      emit: (ev: LocalEval, _meta: EvalMeta) => this.onNewCeval(ev),
+      onUciHover: () => {},
+      redraw: this.redraw,
+      standalone: true, // Don't interfere with ceval in other tabs
+      // Use movetime - engine thinks up to 5 seconds but can be stopped earlier by new moves
+      custom: {
+        search: () => ({
+          multiPv: 1,
+          by: { movetime: 5000 },
+        }),
+      },
+    };
+    this.ceval = new CevalCtrl(opts);
+    setTimeout(() => this.startCeval(), 100);
+  }
+
+  private onNewCeval = (ev: LocalEval): void => {
+    const currentStep = this.stepAt(this.ply);
+    if (!currentStep) return;
+    if (ev.cp === undefined && ev.mate === undefined) return;
+
+    const evalBoard = ev.fen.split(' ')[0];
+    const currentBoard = currentStep.fen.split(' ')[0];
+
+    // Cache evaluation by board FEN, only if higher depth than existing
+    const cachedEval = this.evalCache.get(evalBoard);
+    if (!cachedEval || ev.depth > cachedEval.depth) {
+      this.evalCache.set(evalBoard, ev);
+    }
+
+    // Update currentCeval if it matches the current position
+    if (evalBoard === currentBoard) {
+      this.currentCeval = ev;
+      this.redraw();
+    }
+  };
+
+  getNode = (): TreeNode => {
+    const step = this.stepAt(this.ply);
+    const boardFen = step.fen.split(' ')[0];
+
+    // First try currentCeval if it matches the current position
+    let ceval: ClientEval | undefined;
+    if (this.currentCeval && this.currentCeval.fen.split(' ')[0] === boardFen) {
+      ceval = this.currentCeval;
+    } else {
+      // Fall back to cached evaluation for this position
+      ceval = this.evalCache.get(boardFen);
+    }
+
+    return {
+      id: '',
+      ply: step.ply,
+      fen: step.fen,
+      ceval,
+      children: [],
+      pos: () => ({ isOk: false, isErr: true, error: new Error('not implemented') }) as any,
+      dests: () => new Map(),
+      drops: () => undefined,
+      check: () => !!step.check,
+      outcome: () => undefined,
+    };
+  };
+
+  getOrientation = (): Color => {
+    return boardOrientation(this.data, this.flip);
+  };
+
+  cevalEnabled = (): boolean => true;
+
+  startCeval = (): void => {
+    if (!this.ceval) return;
+
+    const currentStep = this.stepAt(this.ply);
+    const boardFen = currentStep?.fen?.split(' ')[0];
+
+    this.ceval.stop();
+
+    // Try to restore evaluation from cache for the current position
+    if (boardFen) {
+      const cachedEval = this.evalCache.get(boardFen);
+      this.currentCeval = cachedEval || undefined;
+    } else {
+      this.currentCeval = undefined;
+    }
+
+    const firstPly = util.firstPly(this.data);
+    const stepsToAnalyze = this.data.steps.slice(0, this.ply - firstPly + 1);
+    if (stepsToAnalyze.length === 0) return;
+
+    // Compute correct FENs by replaying moves from initial position using chessops
+    // This is necessary because during live games, the server sends board-only FENs
+    const steps = this.computeStepsWithCorrectFens(stepsToAnalyze);
+
+    this.ceval.start('', steps, this.data.game.id, false);
+  };
+
+  // Compute correct FENs by replaying moves from the initial position
+  // This ensures FENs have all required parts (side to move, castling, en passant, etc.)
+  private computeStepsWithCorrectFens(stepsToAnalyze: Step[]): CevalStep[] {
+    const initialFen = this.data.game.initialFen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const variant = this.data.game.variant.key;
+    const rules = lichessRules(variant);
+
+    const setupResult = parseFen(initialFen);
+    if (setupResult.isErr) {
+      return stepsToAnalyze.map(s => ({ ply: s.ply, fen: s.fen, san: s.san, uci: s.uci }));
+    }
+
+    const posResult = setupPosition(rules, setupResult.value);
+    if (posResult.isErr) {
+      return stepsToAnalyze.map(s => ({ ply: s.ply, fen: s.fen, san: s.san, uci: s.uci }));
+    }
+
+    const pos = posResult.value;
+    const result: CevalStep[] = [];
+
+    // First step is the initial position
+    if (stepsToAnalyze.length > 0 && stepsToAnalyze[0].ply === 0) {
+      result.push({
+        ply: 0,
+        fen: initialFen,
+        san: stepsToAnalyze[0].san,
+        uci: stepsToAnalyze[0].uci,
+      });
+    }
+
+    // Replay each move and compute the resulting FEN
+    for (let i = 1; i < stepsToAnalyze.length; i++) {
+      const step = stepsToAnalyze[i];
+      if (step.uci) {
+        const move = parseUci(step.uci);
+        if (move) {
+          pos.play(move);
+          const computedFen = makeFen(pos.toSetup());
+          result.push({
+            ply: step.ply,
+            fen: computedFen,
+            san: step.san,
+            uci: step.uci,
+          });
+        } else {
+          result.push({ ply: step.ply, fen: step.fen, san: step.san, uci: step.uci });
+        }
+      } else {
+        // No UCI, use original FEN (shouldn't happen in normal games)
+        result.push({ ply: step.ply, fen: step.fen, san: step.san, uci: step.uci });
+      }
+    }
+
+    return result;
+  }
+
+  clearCeval = (): void => {
+    this.currentCeval = undefined;
+    this.startCeval();
+  };
+
+  nextNodeBest = (): string | undefined => undefined;
+
+  toggleThreatMode = (): void => {};
+
+  threatMode = (): boolean => false;
+
+  playUciList = (): void => {};
 }

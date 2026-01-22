@@ -32,7 +32,7 @@ final class TopNav(helpers: Helpers):
               a(href := langHref(routes.Simul.home))(trans.site.simultaneousExhibitions()),
               hasDgt.option(a(href := routes.DgtCtrl.index)(trans.dgt.dgtBoard())),
               (ctx.kid.no && !ctx.me.exists(_.isPatron)).option:
-                a(cls := "community-patron mobile-only", href := routes.Plan.index())(trans.patron.donate())
+                a(cls := "community-patron mobile-only", href := "https://github.com/maxdemian-dev/lijazz", targetBlank)("Source")
             )
         )
       ),
@@ -87,7 +87,7 @@ final class TopNav(helpers: Helpers):
           ctx.kid.no.option(a(href := routes.ForumCateg.index)(trans.site.forum())),
           ctx.kid.no.option(a(href := langHref(routes.Ublog.communityAll()))(trans.site.blog())),
           (ctx.kid.no && ctx.me.exists(_.isPatron))
-            .option(a(cls := "community-patron", href := routes.Plan.index())(trans.patron.donate()))
+            .option(a(cls := "community-patron", href := "https://github.com/maxdemian-dev/lijazz", targetBlank)("Source"))
         )
       ),
       st.section(

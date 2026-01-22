@@ -45,12 +45,15 @@ export default class CevalCtrl {
     this.init(opts);
     this.engines = new Engines(this);
 
-    storage.make('ceval.disable').listen(() => {
-      this.stop();
-      this.worker?.destroy();
-      this.worker = undefined; // release memory
-      this.opts.redraw();
-    });
+    // In standalone mode (live eval during games), ignore cross-tab disable signals
+    if (!opts.standalone) {
+      storage.make('ceval.disable').listen(() => {
+        this.stop();
+        this.worker?.destroy();
+        this.worker = undefined; // release memory
+        this.opts.redraw();
+      });
+    }
   }
 
   setOpts(opts: Partial<CevalOpts>): void {
@@ -79,7 +82,7 @@ export default class CevalCtrl {
     }
   }
 
-  onEmit: (ev: LocalEval, work: Work) => void = throttle(200, (ev: LocalEval, work: Work) => {
+  onEmit: (ev: LocalEval, work: Work) => void = throttle(100, (ev: LocalEval, work: Work) => {
     this.sortPvsInPlace(ev.pvs, work.ply % 2 === (work.threatMode ? 1 : 0) ? 'white' : 'black');
     this.curEval = ev;
     this.opts.emit(ev, work);
@@ -146,8 +149,8 @@ export default class CevalCtrl {
       }
     }
 
-    // Notify all other tabs to disable ceval.
-    storage.fire('ceval.disable');
+    // Notify all other tabs to disable ceval (unless in standalone mode for live eval during games).
+    if (!this.opts.standalone) storage.fire('ceval.disable');
 
     this.resume(work);
 

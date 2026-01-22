@@ -64,7 +64,7 @@ final class GarbageCollector(
       _ <-
         val printOpt = alts.prints.headOption
         logger.debug(s"apply ${data.user.username} print=$printOpt")
-        Bus.pub(UserSignup(user, email, req, printOpt.map(_.fp.value), ipSusp, apiVersion))
+        Bus.pub(UserSignup(user, email.some, req, printOpt.map(_.fp.value), ipSusp, apiVersion))
         printOpt.filter(_.banned).map(_.fp.value) match
           case Some(print) =>
             waitThenCollect(user, msg = s"Print ban: `$print`", quickly = quickly)

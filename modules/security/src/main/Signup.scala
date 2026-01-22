@@ -41,10 +41,12 @@ final class Signup(
     case YesBecauseEmailDomain extends MustConfirmEmail(true)
 
   private object MustConfirmEmail:
-    def apply(print: Option[FingerPrint], email: EmailAddress, suspIp: Boolean)(using
+    def apply(print: Option[FingerPrint], email: Option[EmailAddress], suspIp: Boolean)(using
         req: RequestHeader
     ): Fu[MustConfirmEmail] =
-      if !canSendEmails.get() then fuccess(Nope)
+      // No email provided means no confirmation needed
+      if email.isEmpty then fuccess(Nope)
+      else if !canSendEmails.get() then fuccess(Nope)
       else
         val ip = HTTPRequest.ipAddress(req)
         store.recentByIpExists(ip, 7.days).flatMap { ipExists =>
@@ -57,7 +59,7 @@ final class Signup(
                 .map: printFound =>
                   if printFound then YesBecausePrintExists
                   else if suspIp then YesBecauseIpSusp
-                  else if email.domain.exists: dom =>
+                  else if email.flatMap(_.domain).exists: dom =>
                       DisposableEmailDomain.whitelisted(dom) && !DisposableEmailDomain.isOutlook(dom)
                   then Nope
                   else YesBecauseEmailDomain
@@ -130,21 +132,22 @@ final class Signup(
         )
 
   private def confirmOrAllSet(
-      email: EmailAddress,
+      email: Option[EmailAddress],
       mustConfirm: MustConfirmEmail,
       fingerPrint: Option[FingerPrint],
       apiVersion: Option[ApiVersion],
       pwned: IsPwned
   )(user: User)(using RequestHeader, Lang): Fu[Signup.Result] =
     store.deletePreviousSessions(user) >> {
-      if mustConfirm.value then
-        emailConfirm.send(user, email) >> {
-          if emailConfirm.effective then
-            for _ <- api.saveSignup(user.id, apiVersion, fingerPrint, pwned)
-            yield Signup.Result.ConfirmEmail(user, email)
-          else fuccess(Signup.Result.AllSet(user, email))
-        }
-      else fuccess(Signup.Result.AllSet(user, email))
+      email match
+        case Some(e) if mustConfirm.value =>
+          emailConfirm.send(user, e) >> {
+            if emailConfirm.effective then
+              for _ <- api.saveSignup(user.id, apiVersion, fingerPrint, pwned)
+              yield Signup.Result.ConfirmEmail(user, e)
+            else fuccess(Signup.Result.AllSet(user, email))
+          }
+        case _ => fuccess(Signup.Result.AllSet(user, email))
     }
 
   def mobile(apiVersion: ApiVersion)(using req: Request[?])(using Lang, FormBinding): Fu[Signup.Result] =
@@ -257,17 +260,17 @@ final class Signup(
   private def logSignup(
       req: RequestHeader,
       user: User,
-      email: EmailAddress,
+      email: Option[EmailAddress],
       fingerPrint: Option[FingerPrint],
       apiVersion: Option[ApiVersion],
       captcha: Hcaptcha.Result,
       mustConfirm: MustConfirmEmail,
       pwned: IsPwned
   ) =
-    disposableEmailAttempt.onSuccess(user, email, HTTPRequest.ipAddress(req))
+    email.foreach(e => disposableEmailAttempt.onSuccess(user, e, HTTPRequest.ipAddress(req)))
     authLog(
       user.username.into(UserStr),
-      email.value,
+      email.fold("(no email)")(_.value),
       s"fp: $fingerPrint mustConfirm: $mustConfirm captcha: $captcha fp: ${fingerPrint
           .so(_.value)} ip: ${HTTPRequest.ipAddress(req)} api: $apiVersion pwned: $pwned"
     )
@@ -291,4 +294,4 @@ object Signup:
     case RateLimited
     case ForbiddenNetwork
     case ConfirmEmail(user: User, email: EmailAddress)
-    case AllSet(user: User, email: EmailAddress)
+    case AllSet(user: User, email: Option[EmailAddress])

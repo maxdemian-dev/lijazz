@@ -235,11 +235,11 @@ final class Auth(env: Env, accountC: => Account) extends LilaController(env):
                           welcome(user, email, sendWelcomeEmail = true) >>
                             authenticateUser(user, remember = true, pwned = IsPwned.No)
 
-  private def welcome(user: UserModel, email: EmailAddress, sendWelcomeEmail: Boolean)(using
+  private def welcome(user: UserModel, email: Option[EmailAddress], sendWelcomeEmail: Boolean)(using
       ctx: Context
   ): Funit =
-    garbageCollect(user)(email)
-    if sendWelcomeEmail then env.mailer.automaticEmail.welcomeEmail(user, email)
+    email.foreach(e => garbageCollect(user)(e))
+    if sendWelcomeEmail then email.foreach(e => env.mailer.automaticEmail.welcomeEmail(user, e))
     env.mailer.automaticEmail.welcomePM(user)
     env.pref.api.saveNewUserPrefs(user, ctx.req)
 
@@ -306,7 +306,7 @@ final class Auth(env: Env, accountC: => Account) extends LilaController(env):
         email <- env.user.repo.email(user.id)
         _ <- email.so: email =>
           authLog(user.username, email.some, "Confirmed email")
-          welcome(user, email, sendWelcomeEmail = false)
+          welcome(user, Some(email), sendWelcomeEmail = false)
         res <- redirectNewUser(user)
       yield res
 
@@ -410,8 +410,8 @@ final class Auth(env: Env, accountC: => Account) extends LilaController(env):
               for
                 _ <- env.security.authenticator.setPassword(user.id, ClearPassword(data.newPasswd1))
                 confirmed <- env.user.repo.setEmailConfirmed(user.id)
-                _ <- confirmed.so:
-                  welcome(user, _, sendWelcomeEmail = false)
+                _ <- confirmed.so: email =>
+                  welcome(user, Some(email), sendWelcomeEmail = false)
                 _ <- env.user.repo.disableTwoFactor(user.id)
                 _ <- env.security.store.closeAllSessionsOf(user.id)
                 _ <- env.push.webSubscriptionApi.unsubscribeByUser(user)

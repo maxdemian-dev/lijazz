@@ -109,6 +109,7 @@ export interface CevalOpts {
   onSelectEngine?: () => void;
   externalEngines?: ExternalEngineInfoFromServer[];
   custom?: CustomCeval; // hides switch, threat, and go deeper buttons
+  standalone?: boolean; // if true, ignore cross-tab ceval disable signals (for live eval during games)
 }
 
 export interface Hovering {

@@ -237,7 +237,7 @@ final class UserRepo(c: Coll)(using Executor) extends lila.core.user.UserRepo(c)
   def create(
       name: UserName,
       passwordHash: HashedPassword,
-      email: EmailAddress,
+      email: Option[EmailAddress],
       blind: Boolean,
       mobileApiVersion: Option[ApiVersion],
       mustConfirmEmail: Boolean,
@@ -579,14 +579,14 @@ final class UserRepo(c: Coll)(using Executor) extends lila.core.user.UserRepo(c)
   private def newUser(
       name: UserName,
       passwordHash: HashedPassword,
-      email: EmailAddress,
+      email: Option[EmailAddress],
       blind: Boolean,
       mobileApiVersion: Option[ApiVersion],
       mustConfirmEmail: Boolean,
       lang: Option[LangTag],
       kid: KidMode
   ) =
-    val normalizedEmail = email.normalize
+    val normalizedEmail = email.map(_.normalize)
     val now = nowInstant
     $doc(
       F.id -> name.id,
@@ -602,7 +602,7 @@ final class UserRepo(c: Coll)(using Executor) extends lila.core.user.UserRepo(c)
       F.playTime -> PlayTime(0, 0, none),
       F.lang -> lang
     ) ++ {
-      (email.value != normalizedEmail.value).so($doc(F.verbatimEmail -> email))
+      email.zip(normalizedEmail).filter((e, n) => e.value != n.value).map((e, _) => $doc(F.verbatimEmail -> e)).getOrElse($empty)
     } ++ {
       blind.so($doc(F.blind -> true))
     } ++ {

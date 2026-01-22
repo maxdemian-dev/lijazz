@@ -11,6 +11,7 @@ import { renderVoiceBar } from 'voice';
 import { playable } from 'lib/game';
 import { storage } from 'lib/storage';
 import { displayColumns, isTouchDevice } from 'lib/device';
+import { view as cevalView } from 'lib/ceval';
 
 export function main(ctrl: RoundController): VNode {
   const d = ctrl.data,
@@ -57,6 +58,7 @@ export function main(ctrl: RoundController): VNode {
             },
             [renderGround(ctrl), ctrl.promotion.view(ctrl.data.game.variant.key === 'antichess')],
           ),
+          cevalView.renderGauge(ctrl),
           ctrl.voiceMove && renderVoiceBar(ctrl.voiceMove.ctrl, ctrl.redraw),
           ctrl.keyboardHelp && view(ctrl),
           crazyView(ctrl, topColor, 'top') || materialDiffs[0],

@@ -33,7 +33,7 @@ final class AuthUi(helpers: Helpers):
                   )
                 )
               else form3.globalError(form),
-              formFields(form("username"), form("password"), none, register = false),
+              formFields(form("username"), form("password"), register = false),
               form3.submit(trans.site.signIn(), icon = none),
               label(cls := "login-remember")(
                 input(
@@ -89,26 +89,9 @@ final class AuthUi(helpers: Helpers):
               .foldLeft(routes.Auth.signupPost.url): (url, ref) =>
                 addQueryParam(url, "referrer", ref)
           )(
-            formFields(form("username"), form("password"), form("email").some, register = true),
+            formFields(form("username"), form("password"), register = true),
             globalErrorNamed(form.form, "error.namePassword"),
             input(id := "signup-fp-input", name := "fp", tpe := "hidden"),
-            div(cls := "form-group text", dataIcon := Icon.InfoCircle)(
-              trans.site.computersAreNotAllowedToPlay(),
-              br,
-              small(
-                trans.site.byRegisteringYouAgreeToBeBoundByOur(
-                  a(href := routes.Cms.tos)(trans.site.termsOfService())
-                ),
-                br,
-                trans.site.readAboutOur(
-                  a(href := routes.Cms.menuPage(lila.core.id.CmsPageKey("privacy")))(
-                    trans.site.privacyPolicy()
-                  )
-                ),
-                br
-              )
-            ),
-            agreement(form("agreement"), form.form.errors.exists(_.key.startsWith("agreement."))),
             lila.ui.bits.hcaptcha(form),
             button(cls := "submit button text big")(trans.site.signUp())
           )
@@ -313,23 +296,7 @@ final class AuthUi(helpers: Helpers):
         )
       )
 
-  private def agreement(form: play.api.data.Field, error: Boolean)(using Context) =
-    div(cls := "agreement")(
-      error.option(p:
-        strong(cls := "error"):
-          "You must agree to the Lichess policies listed below:"),
-      agreements.map: (field, text) =>
-        form3.checkbox(form(field), text)
-    )
-
-  private def agreements(using Context) = List(
-    "assistance" -> trans.site.agreementAssistance(),
-    "nice" -> trans.site.agreementNice(),
-    "account" -> trans.site.agreementMultipleAccounts(a(href := routes.Cms.tos)(trans.site.termsOfService())),
-    "policy" -> trans.site.agreementPolicy()
-  )
-
-  private def formFields(username: Field, password: Field, email: Option[Field], register: Boolean)(using
+  private def formFields(username: Field, password: Field, register: Boolean)(using
       Context
   ) =
     frag(
@@ -346,8 +313,9 @@ final class AuthUi(helpers: Helpers):
         autocomplete := (if register then "new-password" else "current-password")
       ),
       register.option(form3.passwordComplexityMeter(trans.site.newPasswordStrength())),
-      email.map: email =>
-        form3.group(email, trans.site.email(), help = trans.site.signupEmailHint().some)(
-          form3.input(_, typ = "email")(required)
+      register.option(
+        p(cls := "form-help text", dataIcon := Icon.InfoCircle)(
+          "Please choose a password that you have never used anywhere else!"
         )
+      )
     )

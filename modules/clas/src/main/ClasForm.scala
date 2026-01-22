@@ -81,7 +81,7 @@ final class ClasForm(
       )(StudentData.apply)(unapply)
     ).fill(StudentData(s.realName, s.notes))
 
-    def release = Form(single("email" -> signupForm.emailField))
+    def release = Form(single("email" -> signupForm.requiredEmailField))
 
     def manyCreate(max: Int): Form[ManyNewStudent] = Form:
       mapping(
