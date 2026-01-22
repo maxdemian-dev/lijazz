@@ -8,7 +8,25 @@
   overflow: hidden;
 
   @include mq-is-col1 {
-    display: none;
+    // Horizontal layout for mobile: white on left, black on right
+    width: 100%;
+    height: 10px;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end; // Push black bar to the right
+
+    &.reverse {
+      transform: rotateY(180deg);
+    }
+
+    &::after {
+      box-shadow: 0 0 3px rgba(0, 0, 0, 0.7) inset;
+    }
+
+    tick {
+      display: none;
+    }
+
   }
 
   &.empty {
@@ -50,11 +68,18 @@
 
   .black {
     width: 100%;
-    height: 50%;
+    height: var(--black-percent, 50%);
     background: #666;
     @include if-light {
       background: #888;
     }
     transition: height 1s;
+
+    // Mobile horizontal: width-based instead of height-based
+    @include mq-is-col1 {
+      width: var(--black-percent, 50%);
+      height: 100%;
+      transition: width 1s;
+    }
   }
 }

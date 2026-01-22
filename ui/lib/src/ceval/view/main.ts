@@ -136,7 +136,7 @@ export function renderGauge(ctrl: CevalHandler): VNode | undefined {
   const blackHeight = 100 - (ev + 1) * 50;
 
   const applyGaugeStyle = (el: HTMLElement) => {
-    el.style.height = `${blackHeight}%`;
+    el.style.setProperty('--black-percent', `${blackHeight}%`);
   };
 
   return hl(
