@@ -300,7 +300,7 @@ final class layout(helpers: Helpers, assetHelper: lila.web.ui.AssetFullHelper)(
           a(cls := "site-title", href := langHref("/"))(
             if ctx.kid.yes then span(title := trans.site.kidMode.txt(), cls := "kiddo")(":)")
             else ctx.isBot.option(botImage),
-            div(cls := "site-icon", dataIcon := Icon.Logo),
+            img(src := assetUrl("logo/trollface-logo.png"), cls := "site-icon", alt := "Logo", st.style := "height: 40px; width: auto; margin-right: 8px;"),
             div(cls := "site-name")(siteNameFrag)
           ),
           (!isAppealUser).option(

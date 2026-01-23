@@ -29,11 +29,6 @@ export default function table(ctrl: LobbyController) {
         You will receive a challenge link to share via email or text, as well as a QR code
         that someone nearby can scan.`,
     },
-    {
-      gameType: 'ai',
-      label: i18n.site.playAgainstComputer,
-      disabled: hasOngoingRealTimeGame,
-    },
   ];
   if (opts.bots)
     lobbyButtons.push({

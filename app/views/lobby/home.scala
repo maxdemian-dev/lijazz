@@ -54,9 +54,6 @@ object home:
               ),
               button(cls := "button button-metal lobby__start__button lobby__start__button--friend")(
                 trans.site.challengeAFriend()
-              ),
-              button(cls := "button button-metal lobby__start__button lobby__start__button--ai")(
-                trans.site.playAgainstComputer()
               )
             )
           ),
@@ -117,12 +114,7 @@ object home:
             else
               div(cls := "about-side")(
                 ctx.blind.option(h2(trans.site.about())),
-                trans.site.xIsAFreeYLibreOpenSourceChessServer(
-                  "Lichess",
-                  a(cls := "blue", href := routes.Plan.features)(trans.site.really.txt())
-                ),
-                " ",
-                a(href := "/about")(trans.site.aboutX("Lichess"), "...")
+                "Sponsored by TCL"
               )
           ),
           featured.map: g =>
